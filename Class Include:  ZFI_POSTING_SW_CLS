@@ -1,0 +1,247 @@
+*&---------------------------------------------------------------------*
+*& Include          ZFI_POSTING_SW_CLS
+*&---------------------------------------------------------------------*
+
+CLASS lcl_report DEFINITION.
+  PUBLIC SECTION.
+    TYPES: BEGIN OF ty_selopt,
+             bukrs        TYPE bukrs,               "Company Code
+             local        TYPE xfeld,               "Local File Indicator
+             path         TYPE string,              "LOCALFILE
+             interface_id TYPE char20,              "Custom interface fields
+           END OF ty_selopt.
+
+    CLASS-METHODS:
+      file_f4.
+
+    METHODS:
+      constructor IMPORTING is_selopt TYPE ty_selopt,
+      submit.
+
+  PRIVATE SECTION.
+    DATA ms_selopt TYPE ycl_fi_interfaces=>ty_selopt.
+    DATA mo_interface TYPE REF TO ycl_fi_interfaces.
+    DATA mt_data_alv     TYPE ycl_fi_interfaces=>ty_t_alv.
+    DATA lo_alv TYPE REF TO cl_salv_table.
+
+
+    METHODS:
+      interface_factory,
+      display_alv  CHANGING ct_table TYPE STANDARD TABLE,
+      on_added_function   FOR EVENT added_function OF cl_salv_events
+        IMPORTING e_salv_function.
+
+ENDCLASS.
+
+CLASS lcl_report IMPLEMENTATION.
+
+  METHOD file_f4.
+    DATA: lt_filetable TYPE STANDARD TABLE OF file_table,
+          rv_retcode   TYPE i.
+    CALL METHOD cl_gui_frontend_services=>file_open_dialog
+      CHANGING
+        file_table              = lt_filetable
+        rc                      = rv_retcode
+      EXCEPTIONS
+        file_open_dialog_failed = 1
+        cntl_error              = 2
+        error_no_gui            = 3
+        not_supported_by_gui    = 4
+        OTHERS                  = 5.
+    IF sy-subrc EQ 0.
+      READ TABLE lt_filetable INDEX 1 INTO p_ifile.
+    ELSE.
+      CLEAR p_ifile.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD constructor.
+    ms_selopt = is_selopt.
+  ENDMETHOD.
+
+  METHOD submit.
+
+    interface_factory( ).
+
+    mo_interface->upload_file( EXPORTING  iv_filename = SWITCH #( rb_local WHEN 'X'   THEN p_ifile
+                                                                           WHEN space THEN p_path )
+                                          iv_filetype = SWITCH #( ms_selopt-interface_id
+                                                          WHEN ycl_fi_interfaces=>gc_excel THEN COND #( WHEN rb_local EQ 'X' THEN 'ASC'
+                                                                                           WHEN rb_srver EQ 'X' THEN 'BIN' )
+                                                                                                                          )
+                                          iv_dat_mode = ' '
+                                 EXCEPTIONS error       = 1
+                                            OTHERS      = 2 ).
+
+    IF sy-subrc NE 0.
+      "Add Message Handling Logic Here
+*      mo_message->add_message_data( EXPORTING msgid = syst-msgid
+*                                              msgty = syst-msgty
+*                                              msgno = syst-msgno
+*                                              msgv1 = syst-msgv1
+*                                              msgv2 = syst-msgv2
+*                                              msgv3 = syst-msgv3
+*                                              msgv4 = syst-msgv4 ).
+    ELSE.
+      mo_interface->convert_file( RECEIVING  rt_postingdata    = mt_data_alv
+                                  EXCEPTIONS input_data_error  = 1
+                                             customizing_error = 2
+                                             OTHERS            = 3 ).
+      IF sy-subrc NE 0.
+        "Message Handling Logic Here
+      ENDIF.
+    ENDIF.
+
+* display in alv
+    display_alv( CHANGING ct_table = mt_data_alv ).
+
+  ENDMETHOD.
+
+  METHOD interface_factory.
+    mo_interface = SWITCH #( ms_selopt-interface_id
+        WHEN ycl_fi_interfaces=>gc_excel      THEN NEW ycl_fi_interfaces_excel( ir_selopt = REF #( ms_selopt ) ) ).
+  ENDMETHOD.
+
+  METHOD display_alv.
+
+    DATA: ls_layout TYPE REF TO cl_salv_layout,
+          ls_key    TYPE salv_s_layout_key.
+
+    DATA: lr_selections TYPE REF TO cl_salv_selections,
+          lr_display    TYPE REF TO cl_salv_display_settings.
+
+    DATA: ls_color TYPE lvc_s_colo.
+
+    DATA: lr_sorts TYPE REF TO cl_salv_sorts,
+          lr_aggrs TYPE REF TO cl_salv_aggregations.
+
+    DATA: lr_columns TYPE REF TO cl_salv_columns_table,
+          lr_column2 TYPE REF TO cl_salv_column_table.
+
+    DATA lo_cols TYPE REF TO cl_salv_columns.
+
+    DATA: lo_functions TYPE REF TO cl_salv_functions,
+          lt_func_list TYPE salv_t_ui_func,
+          ls_func_list LIKE LINE OF lt_func_list.
+
+    DATA: lv_info  TYPE lvc_title,
+          lv_title TYPE text30.
+
+    DEFINE _set_text.
+      lo_col->set_short_text( CONV #( &1 ) ).
+      lo_col->set_medium_text( CONV #( &2 ) ).
+      lo_col->set_long_text( CONV #( &3 ) ).
+    END-OF-DEFINITION.
+
+    TRY.
+        cl_salv_table=>factory(
+          IMPORTING
+            r_salv_table = lo_alv
+          CHANGING
+            t_table      = ct_table ).
+
+        lo_alv->set_screen_status(
+          pfstatus      = 'ZSALV_TABLE_STANDARD'
+          report        = sy-repid
+          set_functions = lo_alv->c_functions_all ).
+
+* Get all functions
+        lo_functions = lo_alv->get_functions( ).
+        lt_func_list = lo_functions->get_functions( ).
+
+        ls_layout = lo_alv->get_layout( ).
+        ls_key-report = sy-repid.
+        ls_layout->set_key( ls_key ).
+        ls_layout->set_save_restriction( cl_salv_layout=>restrict_none ).
+
+        lr_selections = lo_alv->get_selections( ).
+        lr_selections->set_selection_mode( if_salv_c_selection_mode=>row_column ).
+
+        lo_alv->get_functions( )->set_all( abap_true ).
+
+        lo_cols = lo_alv->get_columns( ).
+        lo_cols->set_optimize( 'X' ).
+
+        LOOP AT lo_cols->get( ) REFERENCE INTO DATA(lr_column).
+          DATA(lo_col) = CAST cl_salv_column_table( lr_column->r_column ).
+          CASE lr_column->columnname.
+            WHEN 'JV_BILIND'.
+              _set_text 'JV Billing Indicator'
+                        'JV Billing Indicator'
+                        'JV Billing Indicator'.
+
+            WHEN 'JOINT_VENTURE'.
+              _set_text 'Joint Venture'
+                        'Joint Venture'
+                        'Joint Venture'.
+
+            WHEN 'RECOVERY_IND'.
+              _set_text 'Recovery Indicator'
+                        'Recovery Indicator'
+                        'Recovery Indicator'.
+
+            WHEN 'EQUITY_GROUP'.
+              _set_text 'Equity Group'
+                        'Equity Group'
+                        'Equity Group'.
+            WHEN 'BUKRS'.
+              ls_color-col = '1'.
+              lo_col->set_color( ls_color ).
+            WHEN 'BELNR'.
+              ls_color-col = '6'.
+              lo_col->set_color( ls_color ).
+              lo_col->set_cell_type( if_salv_c_cell_type=>hotspot ).
+            WHEN 'GJAHR'.
+              ls_color-col = '6'.
+              lo_col->set_color( ls_color ).
+              lo_col->set_key( abap_false ).
+            WHEN 'PRCTR'.
+              lo_col->set_cell_type( if_salv_c_cell_type=>hotspot ).
+            WHEN 'KOSTL'.
+              lo_col->set_cell_type( if_salv_c_cell_type=>hotspot ).
+          ENDCASE.
+        ENDLOOP.
+
+        DATA(lv_total) = lines( ct_table ).
+
+        lr_display = lo_alv->get_display_settings( ).
+        lr_display->set_striped_pattern( cl_salv_display_settings=>true ).
+
+        lv_title = |{ ms_selopt-interface_id } interface|.
+
+        lv_info = | { lv_title } - items number: { lv_total }|.
+        lr_display->set_list_header( lv_info ).
+
+        lr_sorts = lo_alv->get_sorts( ).
+        lr_sorts->add_sort( columnname = 'KUNNR' sequence = if_salv_c_sort=>sort_up ).
+
+        lr_aggrs = lo_alv->get_aggregations( ).
+        lr_aggrs->add_aggregation( columnname = 'DMBTR' aggregation = if_salv_c_aggregation=>total ).
+        lr_aggrs->add_aggregation( columnname = 'WRBTR' aggregation = if_salv_c_aggregation=>total ).
+
+        SET HANDLER on_added_function FOR lo_alv->get_event( ).
+*        SET HANDLER on_double_click   FOR lo_alv->get_event( ).
+*        SET HANDLER on_single_click   FOR lo_alv->get_event( ).
+
+        lo_alv->display( ).
+      CATCH cx_salv_msg.
+        MESSAGE 'Error in ALV display' TYPE 'I' DISPLAY LIKE 'E'.
+      CATCH cx_salv_not_found.                          "#EC NO_HANDLER
+      CATCH cx_salv_data_error.                         "#EC NO_HANDLER
+      CATCH cx_salv_existing.                           "#EC NO_HANDLER
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD on_added_function.
+
+    CASE e_salv_function.
+      WHEN 'ZPOST'.
+        mo_interface->post_document( EXPORTING iv_ucomm = 'ZPOST'
+                                                it_data_alv = mt_data_alv ).
+        lo_alv->refresh( refresh_mode = if_salv_c_refresh=>soft ).
+    ENDCASE.
+
+  ENDMETHOD.
+
+ENDCLASS.
