@@ -1,0 +1,44 @@
+*&---------------------------------------------------------------------*
+*& Report ZFI_POSTING_SW
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zfi_posting_sw.
+
+*---------------------------------------------------------------------*
+* Selection Screen
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-f01.
+  PARAMETERS:
+    p_bukrs TYPE bukrs OBLIGATORY,
+    p_intf  TYPE char20 OBLIGATORY.
+  PARAMETERS:
+    rb_xls RADIOBUTTON GROUP fmt DEFAULT 'X',
+    rb_csv RADIOBUTTON GROUP fmt,
+    rb_xml RADIOBUTTON GROUP fmt.
+  PARAMETERS:
+    rb_local RADIOBUTTON GROUP loc DEFAULT 'X' USER-COMMAND rad,
+    rb_srver RADIOBUTTON GROUP loc.
+  PARAMETERS:
+    p_ifile TYPE rlgrap-filename MODIF ID loc.
+  PARAMETERS:
+    p_path TYPE string MODIF ID srv.
+SELECTION-SCREEN END OF BLOCK b1.
+
+INCLUDE: zfi_posting_sw_cls.
+
+************************************************************************
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_ifile.
+  lcl_report=>file_f4( ).
+
+************************************************************************
+START-OF-SELECTION.
+
+  NEW lcl_report( is_selopt = VALUE #(
+                  bukrs        = p_bukrs
+                  local        = SWITCH #( rb_local WHEN 'X' THEN 'X'
+                                                    WHEN space THEN ' ')
+                  path         = SWITCH #( rb_local WHEN 'X'   THEN p_ifile
+                                                    WHEN space THEN p_path )
+                  interface_id  = p_intf )
+                 )->submit( ).
