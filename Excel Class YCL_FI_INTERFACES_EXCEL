@@ -1,0 +1,438 @@
+class YCL_FI_INTERFACES_EXCEL definition
+  public
+  inheriting from YCL_FI_INTERFACES
+  final
+  create public .
+
+public section.
+
+  methods CONVERT_FILE
+    redefinition .
+  methods UPLOAD_FILE_LOCAL
+    redefinition .
+  methods UPLOAD_FILE_SERVER
+    redefinition .
+  methods POST_DOCUMENT
+    redefinition .
+protected section.
+  PRIVATE SECTION.
+
+    DATA mt_excel TYPE issr_alsmex_tabline.
+
+    METHODS convert_file_local
+      RETURNING
+        VALUE(rt_postingdata) TYPE ty_t_alv
+      EXCEPTIONS
+        input_data_error
+        customizing_error .
+    METHODS convert_file_server
+      RETURNING
+        VALUE(rt_postingdata) TYPE ty_t_alv
+      EXCEPTIONS
+        input_data_error
+        customizing_error .
+ENDCLASS.
+
+
+
+CLASS YCL_FI_INTERFACES_EXCEL IMPLEMENTATION.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES_EXCEL->CONVERT_FILE
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RT_POSTINGDATA                 TYPE        TY_T_ALV
+* | [EXC!] INPUT_DATA_ERROR
+* | [EXC!] CUSTOMIZING_ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD convert_file.
+
+* read from local
+    IF NOT mr_selopt->local IS INITIAL.
+      convert_file_local( RECEIVING  rt_postingdata = rt_postingdata
+                          EXCEPTIONS input_data_error  = 1
+                                     customizing_error = 2
+                              OTHERS                   = 3 ).
+      DATA(lv_subrc) = sy-subrc.
+    ELSE.
+* read from server
+      convert_file_server( RECEIVING  rt_postingdata = rt_postingdata
+                           EXCEPTIONS input_data_error  = 1
+                                      customizing_error = 2
+                               OTHERS                   = 3 ).
+      lv_subrc = sy-subrc.
+    ENDIF.
+
+    CASE lv_subrc.
+      WHEN 0.
+      WHEN 1.
+        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING input_data_error.
+      WHEN 2.
+        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                    WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING customizing_error.
+      WHEN OTHERS.
+        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+              WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING input_data_error.
+    ENDCASE.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method YCL_FI_INTERFACES_EXCEL->CONVERT_FILE_LOCAL
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RT_POSTINGDATA                 TYPE        TY_T_ALV
+* | [EXC!] INPUT_DATA_ERROR
+* | [EXC!] CUSTOMIZING_ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD convert_file_local.
+
+    CONSTANTS: lc_header_row TYPE kcd_ex_row_n VALUE 1.
+
+    TYPES: BEGIN OF t_fields,
+             col       TYPE kcd_ex_col_n,
+             fieldname TYPE fieldname,
+           END OF t_fields.
+
+    DATA: lv_row     TYPE kcd_ex_row_n,
+          lv_row_all TYPE kcd_ex_row_n,
+          lv_rows    TYPE kcd_ex_row_n,
+          lv_buzei   TYPE buzei.
+
+    DATA: ls_postingdata TYPE ty_alv,
+          lt_postingdata TYPE ty_t_alv,
+          ls_excel       TYPE alsmex_tabline.
+
+    DATA: lt_excel  TYPE issr_alsmex_tabline,
+          lt_fields TYPE STANDARD TABLE OF t_fields.
+
+    FIELD-SYMBOLS: <fv_field> TYPE any.
+******************************************************************************
+
+    SELECT *
+      FROM tbsl WHERE bschl NE @space INTO TABLE @DATA(lt_tbsl).
+
+    IF ms_t001 IS INITIAL.
+      SELECT SINGLE *
+        FROM t001 WHERE bukrs = @mr_selopt->bukrs INTO @DATA(ls_t001).
+    ELSE.
+      ls_t001 = ms_t001.
+    ENDIF.
+
+* Conversion into EXCEL format
+    IF mt_excel[] IS INITIAL.
+      LOOP AT mt_data_string INTO DATA(ls_data_string).
+*        LOOP AT ls_data_string-data INTO DATA(ls_data).
+          CLEAR ls_excel.
+          ls_excel = CONV #( ls_data_string ).
+          APPEND ls_excel TO lt_excel.
+*        ENDLOOP.
+      ENDLOOP.
+    ELSE.
+      lt_excel[] = mt_excel[].
+    ENDIF.
+
+    CHECK NOT lt_excel[] IS INITIAL.
+
+    READ TABLE lt_excel INDEX lines( lt_excel ) INTO DATA(ls_xls).
+    lv_rows = ls_xls-row.
+
+* header fields mapping
+    LOOP AT lt_excel ASSIGNING FIELD-SYMBOL(<fs_excel>)
+                     WHERE row = lc_header_row.
+      SHIFT <fs_excel>-value LEFT DELETING LEADING space.
+
+      APPEND INITIAL LINE TO lt_fields ASSIGNING FIELD-SYMBOL(<fields>).
+      <fields>-col       = <fs_excel>-col.
+      <fields>-fieldname = <fs_excel>-value.
+    ENDLOOP.
+
+    lv_row   = lc_header_row + 1.
+    lv_buzei = 1.
+
+* mapping of universal ALV structure
+    DATA(lv_total) = lines( lt_excel ).
+
+    DO lv_rows TIMES.
+
+      IF sy-index <= lc_header_row.
+        CONTINUE.
+      ENDIF.
+
+      DATA(lv_gui_text) = |{ TEXT-001 } ({ sy-index }/{ lv_total })|.
+
+      cl_progress_indicator=>progress_indicate( i_text = lv_gui_text i_output_immediately = 'X' ).
+
+      CLEAR ls_postingdata.
+
+*      ls_postingdata-interface_id = mr_selopt->interface_id.
+      "ls_postingdata-kind      = 'B'.
+
+      LOOP AT lt_fields INTO DATA(ls_fields).
+        READ TABLE lt_excel INTO ls_xls WITH KEY row = lv_row
+                                                 col = ls_fields-col.
+        IF sy-subrc EQ 0.
+          ASSIGN COMPONENT ls_fields-fieldname OF STRUCTURE ls_postingdata TO <fv_field>.
+          IF sy-subrc EQ 0.
+            DESCRIBE FIELD <fv_field> TYPE DATA(lv_type).
+            CASE lv_type.
+              WHEN 'D'.
+                convert_date( EXPORTING iv_datum = CONV #( ls_xls-value )
+                              IMPORTING ev_datum = <fv_field>
+                              EXCEPTIONS input_data_error  = 1
+                                  OTHERS                   = 2 ).
+                IF sy-subrc <> 0.
+                  MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                              WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING input_data_error.
+                ENDIF.
+              WHEN OTHERS.
+                <fv_field> = ls_xls-value.
+            ENDCASE.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+
+* input data check
+      IF  mr_selopt->bukrs NE ls_postingdata-bukrs.
+        MESSAGE e008(yfi_interfaces) WITH mr_selopt->bukrs ls_postingdata-bukrs RAISING input_data_error.
+      ENDIF.
+      APPEND ls_postingdata TO lt_postingdata.
+
+      lv_row   = lv_row + 1.
+      lv_buzei = lv_buzei + 1.
+    ENDDO.
+
+    rt_postingdata[] = CONV #( lt_postingdata[] ).
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method YCL_FI_INTERFACES_EXCEL->CONVERT_FILE_SERVER
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RT_POSTINGDATA                 TYPE        TY_T_ALV
+* | [EXC!] INPUT_DATA_ERROR
+* | [EXC!] CUSTOMIZING_ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD convert_file_server.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES_EXCEL->POST_DOCUMENT
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_UCOMM                       TYPE        SY-UCOMM
+* | [--->] IT_DATA_ALV                    TYPE        TY_T_ALV
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD post_document.
+
+    DATA: documentheader    TYPE  bapiache09,
+          accountgl	        TYPE TABLE OF	bapiacgl09,
+          accountreceivable TYPE TABLE OF   bapiacar09,
+          currencyamount    TYPE TABLE OF bapiaccr09,
+          return            TYPE TABLE OF bapiret2,
+          extension         TYPE TABLE OF bapiparex,
+          accountpayable    TYPE TABLE OF  bapiacap09.
+
+    DATA: ls_extension         TYPE bapiparex,
+          ls_accountreceivable TYPE bapiacar09,
+          ls_currencyamount    TYPE bapiaccr09,
+          ls_accountgl         TYPE bapiacgl09,
+          ls_accountpayable    TYPE bapiacap09,
+          lv_belnr             TYPE belnr_d,
+          lv_bldat             TYPE bldat,
+          lv_prctr             TYPE prctr,
+          lv_hkont             TYPE hkont,
+          lv_line_item         TYPE i,
+          lv_wrbtr_sum         TYPE wrbtr,
+          lv_bschl             TYPE bschl,
+          lv_linechar(6) .
+
+
+    LOOP AT it_data_alv ASSIGNING FIELD-SYMBOL(<ls_data_alv>).
+      CLEAR lv_bschl.
+* ------------------------------
+* Fill Document Header
+* -------------------------------
+      CLEAR documentheader.
+      documentheader-bus_act = 'RFBU'.
+      documentheader-obj_type = 'BKPFF'.
+      documentheader-username = sy-uname.
+      documentheader-header_txt = <ls_data_alv>-bktxt.
+      documentheader-comp_code = <ls_data_alv>-bukrs.
+      documentheader-doc_date = <ls_data_alv>-bldat.
+      documentheader-pstng_date = sy-datum.
+      documentheader-doc_type = <ls_data_alv>-blart.
+      documentheader-ref_doc_no = <ls_data_alv>-xblnr.
+      CLEAR lv_belnr.
+      IF <ls_data_alv>-blart EQ 'RX'.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = <ls_data_alv>-belnr
+          IMPORTING
+            output = lv_belnr.
+      ELSE.
+        CLEAR lv_belnr.
+      ENDIF.
+      documentheader-ac_doc_no = lv_belnr.
+      documentheader-header_txt = <ls_data_alv>-bktxt.
+      "-------------------
+      lv_wrbtr_sum = <ls_data_alv>-wrbtr + lv_wrbtr_sum.
+      "---------------------
+      "Line item 1
+      "----------------------
+      AT END OF buzei.
+
+        lv_line_item = lv_line_item + 1.
+        "accounts receivable
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = <ls_data_alv>-bschl
+          IMPORTING
+            output = lv_bschl.
+        CLEAR ls_accountreceivable.
+        ls_accountreceivable-itemno_acc =  lv_line_item.
+        ls_accountreceivable-customer = <ls_data_alv>-kunnr.
+        ls_accountreceivable-pmnttrms = <ls_data_alv>-zterm.
+        ls_accountreceivable-alloc_nmbr = <ls_data_alv>-zuonr.
+        ls_accountreceivable-item_text = <ls_data_alv>-sgtxt.
+        ls_accountreceivable-ref_key_3 = <ls_data_alv>-xref3.
+        ls_accountreceivable-payt_rsn = <ls_data_alv>-rstgr.
+        CLEAR lv_prctr.
+
+        APPEND ls_accountreceivable TO accountreceivable.
+        "populate currency
+        CLEAR ls_currencyamount.
+        ls_currencyamount-itemno_acc = lv_line_item.
+        ls_currencyamount-amt_doccur = lv_wrbtr_sum.
+        ls_currencyamount-currency = <ls_data_alv>-waers.
+        ls_currencyamount-disc_base = <ls_data_alv>-skfbt .
+        APPEND ls_currencyamount TO currencyamount.
+*    "---------------------
+*    "Line item 2
+*    "----------------------
+        lv_line_item = lv_line_item + 1.
+        ls_accountgl-itemno_acc = lv_line_item.
+        CLEAR lv_hkont.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = <ls_data_alv>-gkont
+          IMPORTING
+            output = lv_hkont.
+        ls_accountgl-gl_account = lv_hkont.
+        CLEAR lv_prctr.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = <ls_data_alv>-prctr
+          IMPORTING
+            output = lv_prctr.
+        ls_accountgl-profit_ctr = lv_prctr.
+        APPEND ls_accountgl TO accountgl.
+        "populate currency
+        CLEAR ls_currencyamount.
+        ls_currencyamount-itemno_acc = lv_line_item.
+        ls_currencyamount-amt_doccur = lv_wrbtr_sum * -1.
+        ls_currencyamount-currency = <ls_data_alv>-waers.
+        ls_currencyamount-disc_base = <ls_data_alv>-skfbt * -1.
+        APPEND ls_currencyamount TO currencyamount.
+        CLEAR lv_wrbtr_sum.
+      ENDAT.
+
+      "------------
+      AT END OF belnr.
+        CALL FUNCTION 'BAPI_ACC_DOCUMENT_POST'
+          EXPORTING
+            documentheader    = documentheader
+          TABLES
+            accountgl         = accountgl
+            accountreceivable = accountreceivable
+            accountpayable    = accountpayable
+            currencyamount    = currencyamount
+            return            = return
+            extension2        = extension.
+        REFRESH : accountgl,accountreceivable, currencyamount, extension.
+        LOOP AT return INTO DATA(ls_return).
+          IF ls_return-type   = 'S'  AND ls_return-id     = 'RW' AND ls_return-number = '605'.
+            CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+              EXPORTING
+                wait = 'X'.
+          ENDIF.
+
+          IF ls_return-type = 'E' OR ls_return-type = 'A' OR ls_return-type = 'X'.
+            CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+          ENDIF.
+
+          "Message Handling Logic here
+
+        ENDLOOP.
+        REFRESH : return, accountgl,accountreceivable, currencyamount, extension.
+        CLEAR: lv_line_item, lv_wrbtr_sum.
+      ENDAT.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES_EXCEL->UPLOAD_FILE_LOCAL
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_FILENAME                    TYPE        LOCALFILE
+* | [--->] IV_FILETYPE                    TYPE        FILETYPE(optional)
+* | [--->] IV_HAS_FIELD_SEPARATOR         TYPE        CHAR01(optional)
+* | [--->] IV_CODEPAGE                    TYPE        ABAP_ENCODING(optional)
+* | [--->] IV_DAT_MODE                    TYPE        CHAR01(optional)
+* | [EXC!] ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD upload_file_local.
+
+    DATA: lv_filename TYPE localfile.
+
+    DATA: lt_excel       TYPE TABLE OF alsmex_tabline,
+          lt_data_string TYPE string_t,
+          ls_data_string TYPE string,
+          lv_count       TYPE i.
+*******************************************************************
+
+    lv_filename = iv_filename.
+    CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+      EXPORTING
+        filename                = lv_filename
+        i_begin_col             = '1'
+        i_begin_row             = '1' "3
+        i_end_col               = '70'
+        i_end_row               = '9999'
+      TABLES
+        intern                  = lt_excel
+      EXCEPTIONS
+        inconsistent_parameters = 1
+        upload_ole              = 2
+        OTHERS                  = 3.
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+              WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING error.
+    ENDIF.
+
+    mt_excel[] = lt_excel[].
+
+    LOOP AT lt_excel INTO DATA(ls_excel).
+      APPEND ls_excel TO lt_data_string.
+    ENDLOOP.
+
+    APPEND LINES OF lt_data_string[] TO mt_data_string.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES_EXCEL->UPLOAD_FILE_SERVER
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_FILENAME                    TYPE        LOCALFILE
+* | [--->] IV_FILETYPE                    TYPE        FILETYPE(optional)
+* | [EXC!] ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD upload_file_server.
+
+  ENDMETHOD.
+ENDCLASS.
