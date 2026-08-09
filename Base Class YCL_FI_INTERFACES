@@ -1,0 +1,607 @@
+class YCL_FI_INTERFACES definition
+  public
+  create public .
+
+public section.
+
+  types:
+    BEGIN OF ty_alv,
+              belnr              TYPE belnr_d,      "Accounting Document
+              bukrs              TYPE bukrs,        "Company Code
+              xblnr              TYPE xblnr1,       "Reference Document No.
+              docln              TYPE buzei,        "Line Item
+              kunnr              TYPE kunnr,        "Customer
+              gl_account         TYPE saknr,        "G/L Account
+              gkont              TYPE hkont,        "Offsetting Account
+              blart              TYPE blart,        "Document Type
+              umskz              TYPE umskz,        "Special G/L Indicator
+              bldat              TYPE bldat,        "Document Date
+              bktxt              TYPE bktxt,        "Document Header Text
+              sgtxt              TYPE sgtxt,        "Item Text
+              waers              TYPE waers,        "Document Currency
+              wrbtr              TYPE wrbtr,        "Amount in Doc Currency
+              hwaer              TYPE waers,        "Local Currency
+              dmbtr              TYPE dmbtr,        "Amount in Local Currency
+              hwae2              TYPE waers,        "2nd Local Currency
+              dmbe2              TYPE bseg-dmbe2,   "Amount in 2nd Local Currency
+              hwae3              TYPE waers,        "3rd Local Currency
+              dmbe3              TYPE bseg-dmbe3,   "Amount in 3rd Local Currency
+              mwskz              TYPE mwskz,        "Tax Code
+              bupla              TYPE bupla,        "Business Place
+              sectioncode        TYPE secco,        "Section Code (India)
+              vatdate            TYPE datum,        "VAT Reporting Date
+              tax_calc_date      TYPE datum,        "Tax Calculation Date
+              zterm              TYPE zterm,        "Payment Terms
+              zfbdt              TYPE dzfbdt,        "Baseline Date
+              zlsch              TYPE schzw_bseg,        "Payment Method
+              zlspr              TYPE dzlspr,       "Payment Block
+              mschl              TYPE mschl,        "Dunning Key
+              mansp              TYPE mansp,        "Dunning Block
+              kidno              TYPE kidno,        "Payment Reference
+              zbd1t              TYPE dzbd1t,       "Cash Discount Days 1
+              zbd1p              TYPE dzbd1p,       "Cash Discount %
+              zbd2t              TYPE dzbd2t,       "Cash Discount Days 2
+              zbd2p              TYPE dzbd2p,       "Cash Discount %
+              zbd3t              TYPE dzbd3t,       "Net Payment Term
+              skfbt              TYPE skfbt,        "Cash Discount Base Amount
+              acskt              TYPE saknr,        "Alternative Recon/G/L Acct
+              hbkid              TYPE hbkid,        "House Bank
+              hktid              TYPE hktid,        "Account ID
+              bvtyp              TYPE bvtyp,        "Partner Bank Type
+              kkber              TYPE kkber,        "Credit Control Area
+              lzbkz              TYPE lzbkz,        "Payment Method Supplement
+              landl              TYPE land1,        "Country Key
+              xref1              TYPE xref1,        "Reference Key 1
+              xref2              TYPE xref2,        "Reference Key 2
+              xref3              TYPE xref3,        "Reference Key 3
+              prctr              TYPE prctr,        "Profit Center
+              fkber              TYPE fkber,        "Functional Area
+              kostl              TYPE kostl,        "Cost Center
+              pspnr              TYPE ps_psp_pnr,   "WBS Element
+              jv_bilind          TYPE char2,        "JV Billing Indicator
+              joint_venture      TYPE char6,        "Joint Venture
+              recovery_ind       TYPE char2,        "Recovery Indicator
+              equity_group       TYPE char3,        "Equity Group
+              zuonr              TYPE dzuonr,        "Assignment
+              part_businessplace TYPE bupla,   "Partner Business Place
+              bschl              TYPE bschl,        "Posting Key
+              shkzg              TYPE shkzg,        "Debit/Credit Indicator
+              rstgr              TYPE rstgr,        "Reason Code
+              buzei              TYPE buzei,        "Line Item Number
+            END OF ty_alv .
+  types:
+    ty_t_alv TYPE TABLE OF ty_alv WITH EMPTY KEY .
+  types:
+    BEGIN OF ty_selopt,
+             bukrs        TYPE bukrs,               "Company Code
+             local        TYPE xfeld,               "Local File Indicator
+             path         TYPE string,              "LOCALFILE
+             interface_id TYPE char20,              "Custom interface fields
+           END OF ty_selopt .
+  types:
+    ty_t_eps2filnam TYPE TABLE OF eps2filnam WITH EMPTY KEY .
+
+  constants GC_EXCEL type CHAR20 value 'EXCEL' ##NO_TEXT.
+
+  methods UPLOAD_FILE
+    importing
+      !IV_FILENAME type LOCALFILE
+      !IV_FILETYPE type FILETYPE optional
+      !IV_HAS_FIELD_SEPARATOR type CHAR01 default SPACE
+      !IV_CODEPAGE type ABAP_ENCODING optional
+      !IV_DAT_MODE type CHAR01 optional
+    exceptions
+      ERROR .
+  methods UPLOAD_FILE_LOCAL
+    importing
+      !IV_FILENAME type LOCALFILE
+      !IV_FILETYPE type FILETYPE optional
+      !IV_HAS_FIELD_SEPARATOR type CHAR01 optional
+      !IV_CODEPAGE type ABAP_ENCODING optional
+      !IV_DAT_MODE type CHAR01 optional
+    exceptions
+      ERROR .
+  methods UPLOAD_FILE_SERVER
+    importing
+      !IV_FILENAME type LOCALFILE
+      !IV_FILETYPE type FILETYPE optional
+    exceptions
+      ERROR .
+  methods CONVERT_FILE
+    returning
+      value(RT_POSTINGDATA) type TY_T_ALV
+    exceptions
+      INPUT_DATA_ERROR
+      CUSTOMIZING_ERROR .
+  methods CONVERT_DATA_ALV
+    importing
+      !IV_BUKRS type BUKRS
+    changing
+      !CT_DATA type TY_T_ALV .
+  methods CONVERT_DATE
+    importing
+      !IV_DATUM type CHAR10
+    exporting
+      !EV_DATUM type DATUM
+    exceptions
+      INPUT_DATA_ERROR .
+  methods CONVERT_DATE2
+    importing
+      !IV_DATUM type CHAR10
+    exporting
+      !EV_DATUM type DATUM .
+  methods CONSTRUCTOR
+    importing
+      !IR_SELOPT type ref to TY_SELOPT .
+  methods TRANSFER_FILE_TO_ARCHIVE
+    importing
+      !IV_FILENAME type LOCALFILE
+      !IV_FILETYPE type FILETYPE
+    exceptions
+      FILE_OPEN_ERROR .
+  methods TRANSFER_FILE_TO_ERROR_FOLDER
+    importing
+      !IV_FILENAME type LOCALFILE
+      !IV_FILETYPE type FILETYPE
+    exceptions
+      FILE_OPEN_ERROR .
+  class-methods CONVERT_AMOUNT_DISPLAY_TO_SAP
+    importing
+      !IV_CURRENCY type WAERS_CURC
+    changing
+      !CV_WRBTR type WRBTR .
+  class-methods CONVERT_AMOUNT_SAP_TO_DISPLAY
+    importing
+      !IV_CURRENCY type WAERS_CURC
+    changing
+      !CV_WRBTR type WRBTR .
+  methods POST_DOCUMENT
+    importing
+      !IV_UCOMM type SY-UCOMM
+      !IT_DATA_ALV type TY_T_ALV .
+  PROTECTED SECTION.
+
+*    DATA mt_data_data TYPE yfi_tt_data .
+    DATA mr_selopt TYPE REF TO ty_selopt .
+    DATA mt_data_string TYPE string_t .
+    DATA ms_t001 TYPE t001 .
+    DATA mt_tcurx TYPE tt_tcurx .
+
+    METHODS read_file_server_directory
+      RETURNING
+        VALUE(rt_filelist) TYPE eps2filis .
+    METHODS get_file_extension
+      RETURNING
+        VALUE(rt_fileext) TYPE ty_t_eps2filnam.
+  PRIVATE SECTION.
+ENDCLASS.
+
+
+
+CLASS YCL_FI_INTERFACES IMPLEMENTATION.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES->CONSTRUCTOR
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IR_SELOPT                      TYPE REF TO TY_SELOPT
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD constructor.
+
+    mr_selopt = ir_selopt.
+
+* Company Codes
+    SELECT SINGLE *
+      FROM t001 WHERE bukrs EQ @mr_selopt->bukrs INTO CORRESPONDING FIELDS OF @ms_t001.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Static Public Method YCL_FI_INTERFACES=>CONVERT_AMOUNT_DISPLAY_TO_SAP
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_CURRENCY                    TYPE        WAERS_CURC
+* | [<-->] CV_WRBTR                       TYPE        WRBTR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD convert_amount_display_to_sap.
+
+    DATA: lv_amount_in  TYPE dec11_4,
+          lv_amount_out TYPE dec11_4.
+***************************************************************
+
+    lv_amount_in = CONV #( cv_wrbtr ).
+    CALL FUNCTION 'CURRENCY_AMOUNT_DISPLAY_TO_SAP'
+      EXPORTING
+        currency        = iv_currency
+        amount_display  = lv_amount_in
+      IMPORTING
+        amount_internal = lv_amount_out
+      EXCEPTIONS
+        internal_error  = 1
+        OTHERS          = 2.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ELSE.
+      cv_wrbtr = CONV #( lv_amount_out ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Static Public Method YCL_FI_INTERFACES=>CONVERT_AMOUNT_SAP_TO_DISPLAY
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_CURRENCY                    TYPE        WAERS_CURC
+* | [<-->] CV_WRBTR                       TYPE        WRBTR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD convert_amount_sap_to_display.
+
+    DATA: lv_amount_in  TYPE dec11_4,
+          lv_amount_out TYPE dec11_4.
+
+    DATA: lv_wrbtr      TYPE wrbtr,
+          lv_wrbtr_char TYPE char20.
+***************************************************************
+
+    lv_amount_in = CONV #( cv_wrbtr ).
+    lv_wrbtr = cv_wrbtr.
+
+    CALL FUNCTION 'CURRENCY_AMOUNT_SAP_TO_DISPLAY'
+      EXPORTING
+        currency        = iv_currency
+        amount_internal = lv_amount_in
+      IMPORTING
+        amount_display  = lv_amount_out
+      EXCEPTIONS
+        internal_error  = 1
+        OTHERS          = 2.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ELSE.
+      cv_wrbtr = CONV #( lv_amount_out ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES->CONVERT_DATA_ALV
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_BUKRS                       TYPE        BUKRS
+* | [<-->] CT_DATA                        TYPE        TY_T_ALV
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD convert_data_alv.
+
+    TYPES: BEGIN OF t_id,
+             bukrs    TYPE bukrs,
+             id       TYPE char4,
+           END OF t_id.
+
+    TYPES: BEGIN OF t_t001,
+             bukrs TYPE t001-bukrs,
+             waers TYPE t001-waers,
+           END OF t_t001.
+
+    DATA: lv_hkont TYPE hkont,
+          lv_kunnr TYPE kunnr,
+          lv_lifnr TYPE lifnr,
+          lv_buzei TYPE buzei,
+          lv_belnr TYPE belnr_d.
+
+    DATA: lt_id   TYPE STANDARD TABLE OF t_id,
+          ls_id   TYPE t_id,
+          ls_t001 TYPE t_t001.
+********************************************************************************
+
+    SELECT *
+      FROM tbsl WHERE bschl NE @space INTO TABLE @DATA(lt_tbsl).
+
+    SELECT SINGLE *
+      FROM t001 WHERE bukrs EQ @iv_bukrs INTO CORRESPONDING FIELDS OF @ls_t001.
+
+
+********************************************************************************
+* Adding accounting document line number
+    LOOP AT lt_id INTO ls_id.
+      CLEAR: lv_buzei.
+      LOOP AT ct_data ASSIGNING FIELD-SYMBOL(<fs_postingdata>)
+                             WHERE bukrs    = ls_id-bukrs.
+        ADD 1 TO lv_buzei.
+        <fs_postingdata>-buzei = lv_buzei.
+      ENDLOOP.
+    ENDLOOP.
+
+********************************************************************************
+    DATA(lv_total) = lines( ct_data ).
+
+    LOOP AT ct_data ASSIGNING <fs_postingdata>.
+
+* status GUI INFO
+      DATA(lv_gui_text) = |{ TEXT-001 } ({ sy-tabix }/{ lv_total })|.
+      cl_progress_indicator=>progress_indicate( i_text = lv_gui_text i_output_immediately = 'X' ).
+
+      IF NOT <fs_postingdata>-bschl IS INITIAL.
+        UNPACK <fs_postingdata>-bschl TO <fs_postingdata>-bschl.
+      ENDIF.
+
+      IF NOT <fs_postingdata>-zterm IS INITIAL.
+        UNPACK <fs_postingdata>-zterm TO <fs_postingdata>-zterm.
+      ENDIF.
+
+      READ TABLE lt_tbsl INTO DATA(ls_tbsl)
+                         WITH KEY bschl = <fs_postingdata>-bschl.
+      IF sy-subrc EQ 0.
+        <fs_postingdata>-shkzg = ls_tbsl-shkzg.
+      ENDIF.
+
+      CASE <fs_postingdata>-shkzg.
+        WHEN 'S'.
+          <fs_postingdata>-dmbtr = abs( <fs_postingdata>-dmbtr ).
+          <fs_postingdata>-wrbtr = abs( <fs_postingdata>-wrbtr ).
+          <fs_postingdata>-dmbe2 = abs( <fs_postingdata>-dmbe2 ).
+        WHEN 'H'.
+          <fs_postingdata>-dmbtr = abs( <fs_postingdata>-dmbtr ) * ( - 1 ).
+          <fs_postingdata>-wrbtr = abs( <fs_postingdata>-wrbtr ) * ( - 1 ).
+          <fs_postingdata>-dmbe2 = abs( <fs_postingdata>-dmbe2 ) * ( - 1 ).
+      ENDCASE.
+
+      CLEAR: lv_kunnr, lv_lifnr, lv_hkont.
+
+      IF NOT <fs_postingdata>-kostl IS INITIAL.
+        <fs_postingdata>-kostl = |{ <fs_postingdata>-kostl ALPHA = IN }|.
+      ENDIF.
+
+      IF NOT <fs_postingdata>-prctr IS INITIAL.
+        <fs_postingdata>-prctr = |{ <fs_postingdata>-prctr ALPHA = IN }|.
+      ENDIF.
+
+      IF <fs_postingdata>-bupla EQ '0'.
+        UNPACK <fs_postingdata>-bupla TO <fs_postingdata>-bupla.
+      ENDIF.
+
+    ENDLOOP.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES->CONVERT_DATE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_DATUM                       TYPE        CHAR10
+* | [<---] EV_DATUM                       TYPE        DATUM
+* | [EXC!] INPUT_DATA_ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD convert_date.
+
+    DATA: lv_datum TYPE char10.
+
+    lv_datum = iv_datum.
+
+    CALL FUNCTION 'CONVERT_DATE_TO_INTERNAL'
+      EXPORTING
+        date_external            = lv_datum
+*       ACCEPT_INITIAL_DATE      =
+      IMPORTING
+        date_internal            = ev_datum
+      EXCEPTIONS
+        date_external_is_invalid = 1
+        OTHERS                   = 2.
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                  WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING input_data_error.
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES->CONVERT_DATE2
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_DATUM                       TYPE        CHAR10
+* | [<---] EV_DATUM                       TYPE        DATUM
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD convert_date2.
+
+    DATA(lv_datum) = iv_datum.
+    REPLACE ALL OCCURRENCES OF '-' IN lv_datum WITH space.
+    REPLACE ALL OCCURRENCES OF '/' IN lv_datum WITH space.
+    CONDENSE lv_datum.
+    ev_datum = lv_datum.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES->CONVERT_FILE
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RT_POSTINGDATA                 TYPE        TY_T_ALV
+* | [EXC!] INPUT_DATA_ERROR
+* | [EXC!] CUSTOMIZING_ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD convert_file.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Protected Method YCL_FI_INTERFACES->GET_FILE_EXTENSION
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RT_FILEEXT                     TYPE        TY_T_EPS2FILNAM
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_file_extension.
+
+    CASE mr_selopt->interface_id.
+      WHEN gc_excel.
+        APPEND '.XLSX' TO rt_fileext.
+        APPEND '.XLS'  TO rt_fileext.
+      WHEN OTHERS.
+        APPEND '.CSV' TO rt_fileext.
+        APPEND '.TXT' TO rt_fileext.
+        APPEND '.XLSX' TO rt_fileext.
+        APPEND '.XLS'  TO rt_fileext.
+    ENDCASE.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Protected Method YCL_FI_INTERFACES->READ_FILE_SERVER_DIRECTORY
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RT_FILELIST                    TYPE        EPS2FILIS
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD read_file_server_directory.
+    "Implement the logic to read file from AL11
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES->TRANSFER_FILE_TO_ARCHIVE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_FILENAME                    TYPE        LOCALFILE
+* | [--->] IV_FILETYPE                    TYPE        FILETYPE
+* | [EXC!] FILE_OPEN_ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD transfer_file_to_archive.
+    "Implement the logic to transfer files to Archive when reading from AL11
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES->TRANSFER_FILE_TO_ERROR_FOLDER
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_FILENAME                    TYPE        LOCALFILE
+* | [--->] IV_FILETYPE                    TYPE        FILETYPE
+* | [EXC!] FILE_OPEN_ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD transfer_file_to_error_folder.
+    "Implement the logic to transfer files to Error folder when reading from AL11
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES->UPLOAD_FILE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_FILENAME                    TYPE        LOCALFILE
+* | [--->] IV_FILETYPE                    TYPE        FILETYPE(optional)
+* | [--->] IV_HAS_FIELD_SEPARATOR         TYPE        CHAR01 (default =SPACE)
+* | [--->] IV_CODEPAGE                    TYPE        ABAP_ENCODING(optional)
+* | [--->] IV_DAT_MODE                    TYPE        CHAR01(optional)
+* | [EXC!] ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD upload_file.
+
+* upload from local folder
+    IF mr_selopt->local NE space.
+      upload_file_local( EXPORTING iv_filename            = iv_filename
+                                   iv_filetype            = iv_filetype
+                                   iv_dat_mode            = iv_dat_mode
+                                   iv_codepage            = iv_codepage
+                                   iv_has_field_separator = iv_has_field_separator
+                         EXCEPTIONS error  = 1
+                             OTHERS        = 2 ).
+      DATA(lv_subrc) = sy-subrc.
+    ELSE.
+* upload from server
+      upload_file_server( EXPORTING iv_filename            = iv_filename
+                                    iv_filetype            = iv_filetype
+                         EXCEPTIONS error  = 1
+                             OTHERS        = 2 ).
+      lv_subrc = sy-subrc.
+    ENDIF.
+
+    IF lv_subrc NE 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+          WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING error.
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES->UPLOAD_FILE_LOCAL
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_FILENAME                    TYPE        LOCALFILE
+* | [--->] IV_FILETYPE                    TYPE        FILETYPE(optional)
+* | [--->] IV_HAS_FIELD_SEPARATOR         TYPE        CHAR01(optional)
+* | [--->] IV_CODEPAGE                    TYPE        ABAP_ENCODING(optional)
+* | [--->] IV_DAT_MODE                    TYPE        CHAR01(optional)
+* | [EXC!] ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD upload_file_local.
+
+    DATA: lv_filename    TYPE string,
+          lv_file_length TYPE i,
+          lt_data_string TYPE string_t,
+          lv_count       TYPE i.
+**************************************************************************
+
+    lv_filename = iv_filename.
+    CALL METHOD cl_gui_frontend_services=>gui_upload
+      EXPORTING
+        filename                = lv_filename
+        filetype                = iv_filetype "'ASC'
+        has_field_separator     = iv_has_field_separator
+        dat_mode                = iv_dat_mode "SPACE
+        codepage                = iv_codepage "'4110'
+      IMPORTING
+        filelength              = lv_file_length
+      CHANGING
+        data_tab                = lt_data_string
+      EXCEPTIONS
+        file_open_error         = 1
+        file_read_error         = 2
+        no_batch                = 3
+        gui_refuse_filetransfer = 4
+        invalid_type            = 5
+        no_authority            = 6
+        unknown_error           = 7
+        bad_data_format         = 8
+        header_not_allowed      = 9
+        separator_not_allowed   = 10
+        header_too_long         = 11
+        unknown_dp_error        = 12
+        access_denied           = 13
+        dp_out_of_memory        = 14
+        disk_full               = 15
+        dp_timeout              = 16
+        not_supported_by_gui    = 17
+        error_no_gui            = 18
+        OTHERS                  = 19.
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+              WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING error.
+    ELSE.
+
+      IF lt_data_string[] IS INITIAL.
+        MESSAGE i017(yfi_interfaces) RAISING error.
+      ENDIF.
+
+      ADD 1 TO lv_count.
+
+      APPEND lines of lt_data_string TO mt_data_string.
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES->UPLOAD_FILE_SERVER
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_FILENAME                    TYPE        LOCALFILE
+* | [--->] IV_FILETYPE                    TYPE        FILETYPE(optional)
+* | [EXC!] ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD upload_file_server.
+    "Implement the logic to upload files from AL11
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method YCL_FI_INTERFACES->POST_DOCUMENT
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_UCOMM                       TYPE        SY-UCOMM
+* | [--->] IT_DATA_ALV                    TYPE        TY_T_ALV
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD post_document.
+  ENDMETHOD.
+ENDCLASS.
